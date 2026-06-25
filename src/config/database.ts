@@ -1,26 +1,27 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
-import * as dotenv from 'dotenv';
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg'
+import * as dotenv from 'dotenv'
+import * as schema from '../schemas/schema'  // ← যোগ করো
 
-dotenv.config();
+dotenv.config()
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-});
+})
 
 export async function testDatabaseConnection(): Promise<void> {
   try {
-    const client = await pool.connect();
-    console.log('✅ Connected to PostgreSQL database!');
-    client.release();
+    const client = await pool.connect()
+    console.log('✅ Connected to PostgreSQL database!')
+    client.release()
   } catch (err) {
-    console.error('❌ Database connection error:', (err as Error).message);
-    throw err;
+    console.error('❌ Database connection error:', (err as Error).message)
+    throw err
   }
 }
 
-export const db = drizzle(pool);
-export { pool };
+export const db = drizzle(pool, { schema })  // ← schema যোগ করো
+export { pool }
 
 
 // // src/config/database.ts

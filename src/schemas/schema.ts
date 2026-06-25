@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm'
+import { relations } from 'drizzle-orm'
 import {
   boolean,
   pgTable,
@@ -215,26 +215,78 @@ export const generalExpenseModel = pgTable('general_expenses', {
 // ========================
 // Relations
 // ========================
-export const userRelations = relations(userModel, ({ one }) => ({
+export const roleRelations = relations(roleModel, ({ many }) => ({
+  rolePermissions: many(rolePermissionsModel),
+  userRoles: many(userRolesModel),
+}))
+
+export const userRelations = relations(userModel, ({ one, many }) => ({
   role: one(roleModel, {
     fields: [userModel.roleId],
     references: [roleModel.roleId],
   }),
+  userRoles: many(userRolesModel),
 }))
 
-export const roleRelations = relations(roleModel, ({ many }) => ({
+export const permissionsRelations = relations(permissionsModel, ({ many }) => ({
   rolePermissions: many(rolePermissionsModel),
 }))
 
-export const customerRelations = relations(customerModel, ({ many, one }) => ({
+export const rolePermissionsRelations = relations(rolePermissionsModel, ({ one }) => ({
+  role: one(roleModel, {
+    fields: [rolePermissionsModel.roleId],
+    references: [roleModel.roleId],
+  }),
+  permission: one(permissionsModel, {
+    fields: [rolePermissionsModel.permissionId],
+    references: [permissionsModel.id],
+  }),
+}))
+
+export const userRolesRelations = relations(userRolesModel, ({ one }) => ({
+  user: one(userModel, {
+    fields: [userRolesModel.userId],
+    references: [userModel.userId],
+  }),
+  role: one(roleModel, {
+    fields: [userRolesModel.roleId],
+    references: [roleModel.roleId],
+  }),
+}))
+
+export const tenantRelations = relations(tenantModel, ({ many }) => ({
+  customers: many(customerModel),
+  vendors: many(vendorModel),
   orders: many(orderModel),
+  packages: many(packageModel),
+  accounts: many(accountModel),
+  transactions: many(transactionModel),
+  generalExpenses: many(generalExpenseModel),
+}))
+
+export const customerRelations = relations(customerModel, ({ many, one }) => ({
   tenant: one(tenantModel, {
     fields: [customerModel.tenantId],
     references: [tenantModel.id],
   }),
+  orders: many(orderModel),
+  packageCustomers: many(packageCustomerModel),
+}))
+
+export const vendorRelations = relations(vendorModel, ({ one, many }) => ({
+  tenant: one(tenantModel, {
+    fields: [vendorModel.tenantId],
+    references: [tenantModel.id],
+  }),
+  orderServices: many(orderServiceModel),
+  packageVendorFees: many(packageVendorFeeModel),
 }))
 
 export const orderRelations = relations(orderModel, ({ one, many }) => ({
+  tenant: one(tenantModel, {
+    fields: [orderModel.tenantId],
+    references: [tenantModel.id],
+  }),
   customer: one(customerModel, {
     fields: [orderModel.customerId],
     references: [customerModel.id],
@@ -243,14 +295,32 @@ export const orderRelations = relations(orderModel, ({ one, many }) => ({
   tickets: many(ticketModel),
 }))
 
+export const orderServiceRelations = relations(orderServiceModel, ({ one }) => ({
+  order: one(orderModel, {
+    fields: [orderServiceModel.orderId],
+    references: [orderModel.id],
+  }),
+  vendor: one(vendorModel, {
+    fields: [orderServiceModel.vendorId],
+    references: [vendorModel.id],
+  }),
+}))
+
+export const ticketRelations = relations(ticketModel, ({ one }) => ({
+  order: one(orderModel, {
+    fields: [ticketModel.orderId],
+    references: [orderModel.id],
+  }),
+}))
+
 export const packageRelations = relations(packageModel, ({ many, one }) => ({
-  customers: many(packageCustomerModel),
-  checklists: many(packageChecklistModel),
-  vendorFees: many(packageVendorFeeModel),
   tenant: one(tenantModel, {
     fields: [packageModel.tenantId],
     references: [tenantModel.id],
   }),
+  customers: many(packageCustomerModel),
+  checklists: many(packageChecklistModel),
+  vendorFees: many(packageVendorFeeModel),
 }))
 
 export const packageCustomerRelations = relations(packageCustomerModel, ({ one, many }) => ({
@@ -265,17 +335,91 @@ export const packageCustomerRelations = relations(packageCustomerModel, ({ one, 
   installments: many(installmentModel),
 }))
 
+export const installmentRelations = relations(installmentModel, ({ one }) => ({
+  packageCustomer: one(packageCustomerModel, {
+    fields: [installmentModel.packageCustomerId],
+    references: [packageCustomerModel.id],
+  }),
+}))
+
+export const packageChecklistRelations = relations(packageChecklistModel, ({ one }) => ({
+  package: one(packageModel, {
+    fields: [packageChecklistModel.packageId],
+    references: [packageModel.id],
+  }),
+}))
+
+export const packageVendorFeeRelations = relations(packageVendorFeeModel, ({ one }) => ({
+  package: one(packageModel, {
+    fields: [packageVendorFeeModel.packageId],
+    references: [packageModel.id],
+  }),
+  vendor: one(vendorModel, {
+    fields: [packageVendorFeeModel.vendorId],
+    references: [vendorModel.id],
+  }),
+}))
+
+export const accountRelations = relations(accountModel, ({ one, many }) => ({
+  tenant: one(tenantModel, {
+    fields: [accountModel.tenantId],
+    references: [tenantModel.id],
+  }),
+  transactions: many(transactionModel),
+}))
+
+export const transactionRelations = relations(transactionModel, ({ one }) => ({
+  tenant: one(tenantModel, {
+    fields: [transactionModel.tenantId],
+    references: [tenantModel.id],
+  }),
+  account: one(accountModel, {
+    fields: [transactionModel.accountId],
+    references: [accountModel.id],
+  }),
+}))
+
+export const generalExpenseRelations = relations(generalExpenseModel, ({ one }) => ({
+  tenant: one(tenantModel, {
+    fields: [generalExpenseModel.tenantId],
+    references: [tenantModel.id],
+  }),
+}))
+
 // ========================
 // Types
 // ========================
 export type User = typeof userModel.$inferSelect
 export type NewUser = typeof userModel.$inferInsert
 export type Role = typeof roleModel.$inferSelect
+export type NewRole = typeof roleModel.$inferInsert
+export type Permission = typeof permissionsModel.$inferSelect
+export type NewPermission = typeof permissionsModel.$inferInsert
+export type Tenant = typeof tenantModel.$inferSelect
+export type NewTenant = typeof tenantModel.$inferInsert
 export type Customer = typeof customerModel.$inferSelect
 export type NewCustomer = typeof customerModel.$inferInsert
+export type Vendor = typeof vendorModel.$inferSelect
+export type NewVendor = typeof vendorModel.$inferInsert
 export type Order = typeof orderModel.$inferSelect
 export type NewOrder = typeof orderModel.$inferInsert
+export type OrderService = typeof orderServiceModel.$inferSelect
+export type NewOrderService = typeof orderServiceModel.$inferInsert
+export type Ticket = typeof ticketModel.$inferSelect
+export type NewTicket = typeof ticketModel.$inferInsert
 export type Package = typeof packageModel.$inferSelect
 export type NewPackage = typeof packageModel.$inferInsert
+export type PackageCustomer = typeof packageCustomerModel.$inferSelect
+export type NewPackageCustomer = typeof packageCustomerModel.$inferInsert
+export type Installment = typeof installmentModel.$inferSelect
+export type NewInstallment = typeof installmentModel.$inferInsert
+export type PackageChecklist = typeof packageChecklistModel.$inferSelect
+export type NewPackageChecklist = typeof packageChecklistModel.$inferInsert
+export type PackageVendorFee = typeof packageVendorFeeModel.$inferSelect
+export type NewPackageVendorFee = typeof packageVendorFeeModel.$inferInsert
+export type Account = typeof accountModel.$inferSelect
+export type NewAccount = typeof accountModel.$inferInsert
 export type Transaction = typeof transactionModel.$inferSelect
 export type NewTransaction = typeof transactionModel.$inferInsert
+export type GeneralExpense = typeof generalExpenseModel.$inferSelect
+export type NewGeneralExpense = typeof generalExpenseModel.$inferInsert
