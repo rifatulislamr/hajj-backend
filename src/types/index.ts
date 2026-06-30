@@ -26,11 +26,11 @@ declare global {
       user?: {
         userId: number
         username: string
-        role?: number
-        tenantId?: string // ← শুধু এই লাইন যোগ করো
+        roleId?: number
+        tenantId?: string
         permissions?: string[]
         hasPermission: (permission: string) => boolean
-        hasRole: (role: number) => boolean
+        hasRole: (roleId: number) => boolean
       }
     }
   }

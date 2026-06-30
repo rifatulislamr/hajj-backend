@@ -10,7 +10,6 @@ import {
 } from '../services/vendor.service'
 
 const vendorSchema = z.object({
-  tenantId: z.string().uuid(),
   name: z.string().min(1, 'Name is required'),
   type: z.string().optional(),
   contactDetails: z.string().optional(),
@@ -41,10 +40,7 @@ export const getVendor = async (
     const { id } = req.params
     const vendor = await getVendorById(id)
     if (!vendor) {
-      res.status(404).json({
-        status: 'fail',
-        message: 'Vendor not found',
-      })
+      res.status(404).json({ status: 'fail', message: 'Vendor not found' })
       return
     }
     res.status(200).json(vendor)
@@ -61,7 +57,10 @@ export const createVendorController = async (
   try {
     requirePermission(req, 'create_vendor')
     const data = vendorSchema.parse(req.body)
-    const vendor = await createVendor(data)
+    const vendor = await createVendor({
+      ...data,
+      tenantId: req.user?.tenantId,
+    })
     res.status(201).json(vendor)
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -87,10 +86,7 @@ export const updateVendorController = async (
     const data = vendorSchema.partial().parse(req.body)
     const vendor = await updateVendor(id, data)
     if (!vendor) {
-      res.status(404).json({
-        status: 'fail',
-        message: 'Vendor not found',
-      })
+      res.status(404).json({ status: 'fail', message: 'Vendor not found' })
       return
     }
     res.status(200).json(vendor)
@@ -117,16 +113,10 @@ export const deleteVendorController = async (
     const { id } = req.params
     const vendor = await deleteVendor(id)
     if (!vendor) {
-      res.status(404).json({
-        status: 'fail',
-        message: 'Vendor not found',
-      })
+      res.status(404).json({ status: 'fail', message: 'Vendor not found' })
       return
     }
-    res.status(200).json({
-      status: 'success',
-      message: 'Vendor deleted successfully',
-    })
+    res.status(200).json({ status: 'success', message: 'Vendor deleted successfully' })
   } catch (error) {
     next(error)
   }

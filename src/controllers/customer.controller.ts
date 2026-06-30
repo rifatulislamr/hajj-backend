@@ -10,31 +10,14 @@ import {
 } from '../services/customer.service'
 
 const customerSchema = z.object({
-  tenantId: z.string().uuid(),
   name: z.string().min(1, 'Name is required'),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().nullable(),
   phone: z.string().optional(),
   passportNumber: z.string().optional(),
   address: z.string().optional(),
 })
 
-// export const getCustomers = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   try {
-//     requirePermission(req, 'view_customers')
-//     const tenantId = req.query.tenantId as string
-//     const customers = await getAllCustomers(tenantId)
-//     res.status(200).json({
-//       status: 'success',
-//       data: { customers },
-//     })
-//   } catch (error) {
-//     next(error)
-//   }
-// }
+
 
 export const getCustomers = async (
   req: Request,
@@ -82,7 +65,11 @@ export const createCustomerController = async (
   try {
     requirePermission(req, 'create_customer')
     const data = customerSchema.parse(req.body)
-    const customer = await createCustomer(data)
+    // tenantId middleware থেকে নাও
+    const customer = await createCustomer({
+      ...data,
+      tenantId: req.user?.tenantId,  // ← frontend থেকে না, middleware থেকে
+    })
     res.status(201).json({
       status: 'success',
       data: { customer },

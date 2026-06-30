@@ -1,9 +1,8 @@
 import { NextFunction, Request, Response } from 'express'
 import { z } from 'zod'
-
 import jwt from 'jsonwebtoken'
 import { db } from '../config/database'
-import { roleModel, userModel } from '../schemas'
+import { roleModel, userModel, tenantUserModel } from '../schemas'
 import { eq } from 'drizzle-orm'
 import {
   changePassword,
@@ -12,7 +11,6 @@ import {
   loginUser,
   updateUser,
 } from '../services/auth.service'
-import { JsonWebTokenError } from 'jsonwebtoken'
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
@@ -24,13 +22,10 @@ const loginSchema = z.object({
 
 const registerSchema = z
   .object({
-    username: z.string().min(1, 'Username is required'),
-    password: z
-      .string()
-      .min(1, 'Password is required')
-      .min(8, 'Password must be at least 8 characters'),
+    agencyName: z.string().min(1, 'Agency name is required'),
+    username: z.string().min(1),
+    password: z.string().min(8),
     confirmPassword: z.string(),
-    active: z.boolean().default(true),
     roleId: z.number(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -53,24 +48,6 @@ const changePasswordSchema = z
     path: ['confirmNewPassword'],
   })
 
-export const checkToken = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const authHeader = req.headers.authorization
-  const token = authHeader?.split(' ')[1]
-  try {
-    const decoded = jwt.verify(
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoibXl1c2VyIiwicm9sZSI6MSwiaWF0IjoxNzQ1Mzk2ODQxLCJleHAiOjE3NDU0ODMyNDF9.P0fDRyREff4fC7vusiwDMztuQnb9rLPTUwbvcO7Usk4',
-      'mohikhan'
-    )
-    res.json({ success: true, decoded })
-  } catch (err: any) {
-    res.json({ success: false, error: err.message })
-  }
-}
-
 export const login = async (
   req: Request,
   res: Response,
@@ -79,7 +56,6 @@ export const login = async (
   try {
     const { username, password } = loginSchema.parse(req.body)
     const result = await loginUser(username, password)
-
     res.json(result)
   } catch (error) {
     next(error)
@@ -92,20 +68,19 @@ export const register = async (
   next: NextFunction
 ) => {
   try {
-    const { username, password, active, roleId } =
-      registerSchema.parse(req.body)
-    const user = await createUser(
-      { username, password, active, roleId },
+    const { agencyName, username, password, roleId } = registerSchema.parse(
+      req.body
     )
+    const user = await createUser({ agencyName, username, password, roleId })
 
     res.status(201).json({
       status: 'success',
       data: {
         user: {
           username: user.username,
-          password: user.password,
           roleId: user.roleId,
           active: user.active,
+          tenantId: user.tenantId,
         },
       },
     })
@@ -133,16 +108,12 @@ export const updateUserController = async (
     if (username !== undefined) updateData.username = username
     if (voucherTypes !== undefined) updateData.voucherTypes = voucherTypes
     if (roleId !== undefined) updateData.roleId = Number(roleId)
-    // Change this line
-    if (active !== undefined) updateData.active = Boolean(active) // Allow setting to false
+    if (active !== undefined) updateData.active = Boolean(active)
 
     const updatedUser = await updateUser(Number(userId), updateData)
 
     if (!updatedUser) {
-      res.status(404).json({
-        status: 'fail',
-        message: 'User not found',
-      })
+      res.status(404).json({ status: 'fail', message: 'User not found' })
       return
     }
 
@@ -172,32 +143,14 @@ export const changePasswordController = async (
     const { currentPassword, newPassword } = changePasswordSchema.parse(
       req.body
     )
-
     await changePassword(Number(userId), currentPassword, newPassword)
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Password changed successfully',
-    })
+    res
+      .status(200)
+      .json({ status: 'success', message: 'Password changed successfully' })
   } catch (error) {
     next(error)
   }
 }
-
-//this is get user_id and role_id by inner join
-
-// export const getUsersWithRoles = async () => {
-//   return await db
-//     .select({
-//       userId: userModel.userId,
-//       username: userModel.username,
-//       active: userModel.active,
-//       roleName: roleModel.roleName,
-//       voucherTypes: userModel.voucherTypes,
-//     })
-//     .from(userModel)
-//     .innerJoin(roleModel, eq(userModel.roleId, roleModel.roleId));
-// };
 
 export const getUsersWithRoles = async (
   req: Request,
@@ -213,7 +166,8 @@ export const getUsersWithRoles = async (
         roleName: roleModel.roleName,
       })
       .from(userModel)
-      .innerJoin(roleModel, eq(userModel.roleId, roleModel.roleId))
+      .leftJoin(tenantUserModel, eq(tenantUserModel.userId, userModel.userId))
+      .leftJoin(roleModel, eq(tenantUserModel.roleId, roleModel.roleId))
 
     res.status(200).json({
       status: 'success',
@@ -238,17 +192,13 @@ export const getUsersCompanyLocationVoucher = async (
 ) => {
   try {
     const userInfo = await db
-      .select({
-        userId: userModel.userId,
-      })
+      .select({ userId: userModel.userId })
       .from(userModel)
 
     res.status(200).json({
       status: 'success',
       data: {
-        users: userInfo.map((user) => ({
-          userId: user.userId,
-        })),
+        users: userInfo.map((user) => ({ userId: user.userId })),
       },
     })
   } catch (error) {

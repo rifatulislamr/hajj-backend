@@ -7,7 +7,7 @@ import {
   verifyAccessToken,
 } from "../services/utils/jwt.utils";
 import { db } from "../config/database";
-import { tenantModel, userModel } from "../schemas/schema";
+import { tenantUserModel } from "../schemas/schema";
 
 export const authenticateUser = async (
   req: Request,
@@ -17,37 +17,34 @@ export const authenticateUser = async (
   try {
     const authHeader = req.headers.authorization;
     const token = extractTokenFromHeader(authHeader);
-    console.log(token);
     const decoded = verifyAccessToken(token);
 
-    const permissions = await getUserPermissions(decoded.userId);
+    // tenantId এখন JWT payload থেকেই আসবে (login এর সময় বসানো হয়েছে)
+    const tenantId = decoded.tenantId;
+    if (!tenantId) {
+      throw UnauthorizedError("Tenant context missing in token");
+    }
 
-    // user এর tenantId বের করো
-    const [userWithTenant] = await db
-      .select({
-        tenantId: userModel.roleId, // আপাতত roleId দিয়ে tenant বুঝাচ্ছি
-      })
-      .from(userModel)
-      .where(eq(userModel.userId, decoded.userId))
+    const [tenantUser] = await db
+      .select({ roleId: tenantUserModel.roleId })
+      .from(tenantUserModel)
+      .where(eq(tenantUserModel.userId, decoded.userId));
+      // চাইলে .where(and(eq(userId, decoded.userId), eq(tenantId, tenantId))) করো
 
-    // tenants টেবিল থেকে প্রথম tenant নাও
-    const [tenant] = await db.select().from(tenantModel)
+    const permissions = await getUserPermissions(decoded.userId, tenantId);
 
     req.user = {
       userId: decoded.userId,
       username: decoded.username,
-      role: decoded.role,
-      tenantId: tenant?.id,
+      tenantId: tenantId,
+      roleId: tenantUser?.roleId,
       permissions: permissions,
       hasPermission: (perm: string) => permissions.includes(perm),
-      hasRole: (role: number) => decoded.role === role,
+      hasRole: (roleId: number) => tenantUser?.roleId === roleId,
     };
 
-    console.log("🚀 ~ authenticateUser ~ req.user:", req.user)
-    console.log('permissions', permissions)
     next();
   } catch (error) {
-    console.error(error)
     return next(UnauthorizedError("Invalid token"));
   }
 };
@@ -55,57 +52,3 @@ export const authenticateUser = async (
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import { NextFunction, Request, Response } from "express";
-// import { UnauthorizedError } from "../services/utils/errors.utils";
-// import { extractTokenFromHeader, getUserPermissions, verifyAccessToken } from "../services/utils/jwt.utils";
-
-
-
-// export const authenticateUser = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   try {
-//     const authHeader = req.headers.authorization;
-//     const token = extractTokenFromHeader(authHeader);
-//     console.log(token);
-//     const decoded = verifyAccessToken(token) ;
-  
-//     const permissions = await getUserPermissions(decoded.userId);
-   
-//     req.user = {
-//       userId: decoded.userId,
-//       username: decoded.username,
-//       role: decoded.role,
-//       permissions:permissions,
-//       hasPermission: (perm: string) => permissions.includes(perm),
-//       hasRole: (role: number) => decoded.role === role,
-//     };
-//     console.log("🚀 ~ authenticateUser ~ req.user:", req.user)
-//     console.log('permissions',permissions)
-//     next();
-//   } catch (error) {
-//     console.error(error)
-//     return next(UnauthorizedError("Invalid token"));
-//   }
-// };
-
-// // utils/getUserPermissions.ts

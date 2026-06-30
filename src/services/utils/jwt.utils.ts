@@ -1,10 +1,10 @@
 import jwt, { SignOptions } from "jsonwebtoken";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { BadRequestError, UnauthorizedError } from "./errors.utils";
 import { db } from "../../config/database";
 import { Request } from "express";
 import {
-  userRolesModel,
+  tenantUserModel,
   rolePermissionsModel,
   permissionsModel,
 } from "../../schemas/schema";
@@ -12,25 +12,25 @@ import {
 interface TokenPayload {
   userId: number;
   username: string;
-  role?: number;
+  tenantId?: string;
+  roleId?: number;
   [key: string]: any;
 }
 
 const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || "24h";
 const JWT_SECRET = process.env.JWT_SECRET;
-console.log(JWT_SECRET);
+
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not configured");
 }
 
 export const generateAccessToken = (payload: TokenPayload): string | undefined => {
   try {
-    const expiresIn = ACCESS_TOKEN_EXPIRES_IN as `${number}${'s' | 'm' | 'h' | 'd'}` || "24h";
+    const expiresIn = (ACCESS_TOKEN_EXPIRES_IN as `${number}${'s' | 'm' | 'h' | 'd'}`) || "24h";
     const options: SignOptions = {
       expiresIn: expiresIn,
     };
     const token = jwt.sign(payload, JWT_SECRET, options);
-    console.log(`Token received:[${token}] length: ${token.length}`);
     return token;
   } catch (error) {
     console.error(error);
@@ -40,7 +40,6 @@ export const generateAccessToken = (payload: TokenPayload): string | undefined =
 
 export const verifyAccessToken = (token: string): TokenPayload => {
   try {
-    console.log('before Varification', token, 'payload', JWT_SECRET);
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
   } catch (error) {
     console.error(error);
@@ -100,18 +99,23 @@ export const getMillisecondsFromTimeString = (timeString: string): number => {
   }
 };
 
-export async function getUserPermissions(userId: number) {
+export async function getUserPermissions(userId: number, tenantId: string) {
   try {
-    const userRoles = await db
+    const tenantUser = await db
       .select({
-        roleId: userRolesModel.roleId,
+        roleId: tenantUserModel.roleId,
       })
-      .from(userRolesModel)
-      .where(eq(userRolesModel.userId, userId))
+      .from(tenantUserModel)
+      .where(
+        and(
+          eq(tenantUserModel.userId, userId),
+          eq(tenantUserModel.tenantId, tenantId)
+        )
+      );
 
-    if (!userRoles.length) return []
+    if (!tenantUser.length) return [];
 
-    const roleIds = userRoles.map((ur) => ur.roleId)
+    const roleId = tenantUser[0].roleId;
 
     const rolePerms = await db
       .select({
@@ -122,19 +126,19 @@ export async function getUserPermissions(userId: number) {
         permissionsModel,
         eq(rolePermissionsModel.permissionId, permissionsModel.id)
       )
-      .where(eq(rolePermissionsModel.roleId, roleIds[0]))
+      .where(eq(rolePermissionsModel.roleId, roleId));
 
-    return rolePerms.map((rp) => rp.permissionName)
+    return rolePerms.map((rp) => rp.permissionName);
   } catch (error) {
-    console.error('getUserPermissions error:', error)
-    return []
+    console.error('getUserPermissions error:', error);
+    return [];
   }
 }
 
 export const requirePermission = (req: Request, permission: string) => {
-  console.log('this is current user', req.user);
-  console.log('Is permission', req.user?.hasPermission(permission));
   if (!req.user?.hasPermission(permission)) {
     throw new Error('Forbidden');
   }
 };
+
+
